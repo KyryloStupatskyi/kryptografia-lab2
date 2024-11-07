@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <string>
 #include <cstring>
+#include <stdexcept>
+#include <sstream>
 
 std::string preprocess(const std::string& text) {
     std::string result;
@@ -15,16 +17,41 @@ std::string preprocess(const std::string& text) {
     return result;
 }
 
-std::string caesarCipher(const std::string& text, int key, bool encrypt = true) {
+int modularInverse(int a, int m) {
+    a = a % m;
+    for (int x = 1; x < m; x++) {
+        if ((a * x) % m == 1) {
+            return x;
+        }
+    }
+    throw std::invalid_argument("Brak odwrotności modularnej dla a.");
+}
+
+std::string affineCipher(const std::string& text, int a, int b, bool encrypt = true) {
     std::string result;
+    int a_inv = 0;
+    if (!encrypt) {
+        a_inv = modularInverse(a, 26); 
+    }
+    
     for (char ch : text) {
+        int x = ch - 'A';
         if (encrypt) {
-            result += 'A' + (ch - 'A' + key) % 26;
+            result += 'A' + (a * x + b) % 26;
         } else {
-            result += 'A' + (ch - 'A' - key + 26) % 26;
+            result += 'A' + (a_inv * (x - b + 26)) % 26;
         }
     }
     return result;
+}
+
+int gcd(int a, int b) {
+    while (b != 0) {
+        int temp = b;
+        b = a % b;
+        a = temp;
+    }
+    return a;
 }
 
 std::string readFile(const std::string& filename) {
@@ -51,7 +78,7 @@ void writeFile(const std::string& filename, const std::string& content) {
 int main(int argc, char* argv[]) {
     std::string inputFile, outputFile, keyFile;
     bool encryptMode = true;
-    int key = 0;
+    int a = 0, b = 0;
 
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "-i") == 0) {
@@ -68,12 +95,19 @@ int main(int argc, char* argv[]) {
     }
 
     std::string keyContent = readFile(keyFile);
-    key = std::stoi(keyContent);
+    std::istringstream keyStream(keyContent);
+    keyStream >> a >> b;
+
+    if (gcd(a, 26) != 1) {
+        std::cerr << "Wartość a musi być względnie pierwsza do 26." << std::endl;
+        exit(1);
+    }
 
     std::string inputText = readFile(inputFile);
     std::string preprocessedText = preprocess(inputText);
-    std::string resultText = caesarCipher(preprocessedText, key, encryptMode);
+    std::string resultText = affineCipher(preprocessedText, a, b, encryptMode);
 
+    // Zapis wyniku do pliku wyjściowego
     writeFile(outputFile, resultText);
 
     std::cout << "Proces zakończony sukcesem. Wynik zapisano do: " << outputFile << std::endl;
