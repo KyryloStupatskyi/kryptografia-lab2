@@ -22,16 +22,42 @@ std::string preprocess(const std::string& text) {
     return result;
 }
 
-std::string caesarCipher(const std::string& text, int key, bool encrypt = true) {
+int modularInverse(int a, int m) {
+    a = a % m;
+    for (int x = 1; x < m; x++) {
+        if ((a * x) % m == 1) {
+            return x;
+        }
+    }
+    std::cout << "A: " << a << std::endl;
+    throw std::invalid_argument("Brak odwrotności modularnej dla a.");
+}
+
+std::string affineCipher(const std::string& text, int a, int b, bool encrypt = true) {
     std::string result;
+    int a_inv = 0;
+    if (!encrypt) {
+        a_inv = modularInverse(a, 26);
+    }
+
     for (char ch : text) {
+        int x = ch - 'A';
         if (encrypt) {
-            result += 'A' + (ch - 'A' + key) % 26;
+            result += 'A' + (a * x + b) % 26;
         } else {
-            result += 'A' + (ch - 'A' - key + 26) % 26;
+            result += 'A' + (a_inv * (x - b + 26)) % 26;
         }
     }
     return result;
+}
+
+int gcd(int a, int b) {
+    while (b != 0) {
+        int temp = b;
+        b = a % b;
+        a = temp;
+    }
+    return a;
 }
 
 std::string readFile(const std::string& filename) {
@@ -115,7 +141,7 @@ double calculate_chi_square(const std::map<std::string, int>& observed, const st
 int main(int argc, char* argv[]) {
     std::string inputFile, outputFile, keyFile;
     bool encryptMode = true, bruteForce = false;
-    int key = 0;
+    int a = 0, b = 0;
 
     for (int i = 1; i < argc; ++i) {
         if (std::strcmp(argv[i], "-i") == 0) {
@@ -139,49 +165,44 @@ int main(int argc, char* argv[]) {
     std::string preprocessedText = preprocess(inputText);
 
     if (bruteForce) {
-        int best_shift = -1;
+        int best_a = -1, best_b = -1;
         double threshold = gsl_cdf_chisq_Pinv(0.95, 25);
         double best_chi_squared = std::numeric_limits<double>::max();
 
-        //int ngramOrder = refNgramMode - '0';
         std::string candidateText;
-        for (int i = 0; i < 26; ++i) {
-            candidateText = caesarCipher(preprocessedText, i, encryptMode);
-            for (int ngramOrder = 1; ngramOrder <= 4; ++ngramOrder) {
-                std::string referenceFile;
-                switch (ngramOrder) {
-                    case 1:
-                        referenceFile = "eng-n-grams/english_monograms.txt";
-                    break;
-                    case 2:
-                        referenceFile = "eng-n-grams/english_bigrams.txt";
-                    break;
-                    case 3:
-                        referenceFile = "eng-n-grams/english_trigrams.txt";
-                    break;
-                    case 4:
-                        referenceFile = "eng-n-grams/english_quadgrams.txt";
-                    break;
-                }
+        int ngramOrder = 1;
 
+        encryptMode = false;
+
+        for (int bfa = 1; bfa < 26; ++++bfa) {
+            if(bfa == 13) continue;
+            for (int bfb = 0; bfb < 26; ++bfb) {
+                candidateText = affineCipher(preprocessedText, bfa, bfb, encryptMode);
+                std::cout << "Candidate text: " << candidateText << std::endl;
+                std::cout << "a: " << bfa << " b: " << bfb << std::endl;
+                std::string referenceFile = "eng-n-grams/english_monograms.txt";
                 std::map<std::string, int> observedNgrams = get_multigrams(ngramOrder, candidateText);
                 std::map<std::string, double> referenceNgrams = read_reference_ngrams(referenceFile);
 
                 int totalNgrams = candidateText.length() - (ngramOrder - 1);
                 double chiSquare = calculate_chi_square(observedNgrams, referenceNgrams, totalNgrams);
+                std::cout << "Chi square: " << chiSquare << std::endl;
 
                 if (chiSquare < threshold && chiSquare < best_chi_squared) {
                     best_chi_squared = chiSquare;
-                    best_shift = i;
+                    best_a = bfa;
+                    best_b = bfb;
                 }
             }
-
         }
 
-        if (best_shift != -1) {
-            std::cout << "Best shift: " << best_shift << std::endl;
-            std::cout << "Decrypted text: " << caesarCipher(preprocessedText, best_shift, encryptMode) << std::endl;
-            writeFile(outputFile, caesarCipher(preprocessedText, best_shift, encryptMode));
+
+
+        if (best_a != -1 && best_b != -1) {
+            std::cout << "Best a: " << best_a << std::endl;
+            std::cout << "Best b: " << best_b << std::endl;
+            std::cout << "Decrypted text: " << affineCipher(preprocessedText, best_a, best_b, encryptMode) << std::endl;
+            writeFile(outputFile, affineCipher(preprocessedText, best_a, best_b, encryptMode));
             std::cout << "Chi-squared value: " << best_chi_squared << std::endl;
         } else {
             std::cout << "No suitable shift found within the threshold." << std::endl;
@@ -190,15 +211,21 @@ int main(int argc, char* argv[]) {
     }
     else {
         std::string keyContent = readFile(keyFile);
-        key = std::stoi(keyContent);
+        std::istringstream keyStream(keyContent);
+        keyStream >> a >> b;
 
-        std::string resultText = caesarCipher(preprocessedText, key, encryptMode);
+        if (gcd(a, 26) != 1) {
+            std::cerr << "Wartość a musi być względnie pierwsza do 26." << std::endl;
+            exit(1);
+        }
 
+        std::string resultText = affineCipher(preprocessedText, a, b, encryptMode);
+
+        // Zapis wyniku do pliku wyjściowego
         writeFile(outputFile, resultText);
 
         std::cout << "Proces zakończony sukcesem. Wynik zapisano do: " << outputFile << std::endl;
     }
-
 
     return 0;
 

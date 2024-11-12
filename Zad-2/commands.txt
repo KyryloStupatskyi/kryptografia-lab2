@@ -5,3 +5,10 @@ g++ Zad-2.cpp -o Zad-2 -lgsl -lgslcblas -lm
 /Zad-2 -a bf -i szyfrogram.txt -o tekst_odszyfrowany.txt
 
 
+
+g++ Zad-2.cpp -o Zad-2 -lgsl -lgslcblas -lm
+
+./Zad-2 -e -k klucz.txt -i tekst_jawny.txt -o szyfrogram.txt
+
+/Zad-2 -a bf -i szyfrogram.txt -o tekst_odszyfrowany.txt
+
